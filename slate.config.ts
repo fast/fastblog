@@ -6,7 +6,7 @@ import { defineConfig } from './src/helpers/config-helper';
 export default defineConfig({
   lang: 'en-US',
   site: 'https://fast.github.io',
-  title: 'FlatLabs / Blog',
+  title: 'FastLabs / Blog',
   description: 'We develop fast Rust crates and release them fast.',
   lastModified: true,
   readTime: true,

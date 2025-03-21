@@ -1,0 +1,17 @@
+{
+  "prettier.documentSelectors": ["**/*.astro"],
+  "[astro]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "astro",
+    "typescript",
+    "typescriptreact"
+  ],
+  "i18n-ally.localesPaths": [
+    "src/i18n",
+    "src/i18n/lang"
+  ]
+}

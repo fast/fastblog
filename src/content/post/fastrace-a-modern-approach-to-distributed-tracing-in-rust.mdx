@@ -8,11 +8,11 @@ pubDate: 2025-03-21
 
 ## TL;DR
 
-Distributed tracing is critical for understanding modern microservice architectures. While [`tokio-rs/tracing`](https://github.com/tokio-rs/tracing) has been the standard in Rust, it comes with significant challenges: ecosystem fragmentation, complex configuration, and high overhead. 
+Distributed tracing is critical for understanding modern microservice architectures. While `tokio-rs/tracing` is widely used in Rust, it comes with significant challenges: ecosystem fragmentation, complex configuration, and high overhead. 
 
-[`fastrace`](https://github.com/fast/fastrace) provides a production-ready solution with seamless ecosystem integration, out-of-box OpenTelemetry support, and a simpler API that works naturally with the existing logging infrastructure.
+[fastrace](https://github.com/fast/fastrace) provides a production-ready solution with seamless ecosystem integration, out-of-box OpenTelemetry support, and a more straightforward API that works naturally with the existing logging infrastructure.
 
-The following example demonstrates the simplicity of tracing functions with `fastrace`:
+The following example demonstrates how to trace functions with `fastrace`:
 
 ```rust
 #[fastrace::trace]
@@ -21,13 +21,13 @@ pub fn send_request(req: HttpRequest) -> Result<(), Error> {
 }
 ```
 
-It's being used in production at companies like [ScopeDB](https://www.scopedb.io/), where it helps trace and debug petabyte-scale observability data workloads.
+It's being used in production by products like [ScopeDB](https://www.scopedb.io/blog/manage-observability-data-in-petabytes), where it helps trace and debug petabyte-scale observability data workloads.
 
 ![Distributed Tracing Visualization](assets/scopedb-traces.png)
 
 ## Why Distributed Tracing Matters
 
-In today's world of microservices and distributed systems, understanding what's happening inside your applications has never been more challenging. When a single user request might touch dozens of services before completion, traditional logging approaches quickly fall short.
+Understanding what is happening inside your applications has never been more challenging in today's microservices and distributed systems. A user request might touch dozens of services before completion, and traditional logging approaches quickly fall short.
 
 Consider a typical request flow:
 
@@ -35,9 +35,9 @@ Consider a typical request flow:
 User → API Gateway → Auth Service → User Service → Database
 ```
 
-When something goes wrong or performs poorly, where exactly is the issue? Individual service logs only show fragments of the story, lacking the crucial context of how the request flows through your entire system.
+When an exception is thrown, or the app performs poorly, where exactly is the root cause? Individual service logs only show fragments of the whole trace, lacking the crucial context of how the request flows through your entire system.
 
-This is where distributed tracing becomes essential. Tracing creates a connected view of your request's journey across service boundaries, making it possible to:
+This is where distributed tracing becomes essential. Tracing creates a connected view of your request's flow across service boundaries, making it possible to:
 
 - Identify performance bottlenecks across services
 - Debug complex interactions between components
@@ -47,7 +47,7 @@ This is where distributed tracing becomes essential. Tracing creates a connected
 
 ## A Famous Approach: `tokio-rs/tracing`
 
-For many Rust developers, the `tokio-rs/tracing` ecosystem has been the go-to solution for application instrumentation. Let's look at how a typical implementation works:
+For some Rust developers, `tokio-rs/tracing` is the go-to solution for application instrumentation. Let's look at how a typical implementation works:
 
 ```rust
 fn main() {
@@ -75,18 +75,16 @@ fn main() {
 For instrumenting functions, `tokio-rs/tracing` provides attribute macros:
 
 ```rust
-use tracing::instrument;
-
-#[instrument(skip(password), fields(user_id = user.id))]
+#[tracing::instrument(skip(password), fields(user_id = user.id))]
 async fn authenticate(user: &User, password: &str) -> Result<AuthToken, AuthError> {
-    info!("Authenticating user {}", user.id);
+    tracing::info!("Authenticating user {}", user.id);
     // ...more code...
 }
 ```
 
 ## The Challenges with `tokio-rs/tracing`
 
-While powerful, `tokio-rs/tracing` comes with several significant challenges:
+According to our previous user experience, `tokio-rs/tracing` comes with several significant challenges:
 
 ### 1. Ecosystem Fragmentation
 
@@ -104,29 +102,29 @@ This fragmentation is particularly problematic for library authors. When creatin
 
 1. Use the `log` crate for compatibility with the broader ecosystem
 2. Use `tokio-rs/tracing` for better observability features
-3. Implement dual support for both systems (increasing maintenance burden)
 
-    This often leads to complex feature-flag systems and wrapper macros:
+Many libraries choose the first option for simplicity, but miss out on the benefits of tracing.
 
-    ```rust
-    macro_rules! info {
-        ($($arg:tt)*) => {
-            if cfg!(feature = "tracing") {
-                tracing::info!($($arg)*);
-            } else {
-                log::info!($($arg)*);
-            }
-        }
-    }
-    ```
+While `tokio-rs/tracing` does provide a feature flag 'log' that allows emitting log records to the `log` crate when using tracing's macros, library authors must manually enable this feature flag to ensure all users properly receive log records regardless of which logging framework they use. This creates additional configuration complexity for library maintainers.
 
-Many libraries choose the first option for simplicity, but miss out on the benefits of tracing. This creates a situation where applications have inconsistent instrumentation across their dependency tree.
+Furthermore, applications using `tokio-rs/tracing` must additionally install and configure the `tracing-log` bridge to properly receive log records from libraries that use the `log` crate. This creates a bidirectional compatibility problem requiring explicit configuration:
+
+```toml
+# In a library's Cargo.toml
+[dependencies]
+tracing = { version = "0.1", features = ["log"] }  # Required for log compatibility
+
+# In an application's Cargo.toml
+[dependencies]
+tracing = "0.1"
+tracing-log = "0.2"  # Required bridge for log crate compatibility
+```
 
 ### 2. Performance Impact for Libraries
 
-Library authors are particularly sensitive to performance overhead, as their code may be called in tight loops or performance-critical paths. `tokio-rs/tracing`'s overhead can be substantial when enabled, which creates a dilemma:
+Library authors are particularly sensitive to performance overhead, as their code may be called in tight loops or performance-critical paths. `tokio-rs/tracing`'s overhead can be substantial when instrumented, which creates a dilemma:
 
-1. Always enable tracing (and impose overhead on all users)
+1. Always instrument tracing (and impose overhead on all users)
 2. Don't instrument at all (and lose observability)
 3. Create a complex feature-flag system (increasing maintenance burden)
 
@@ -139,16 +137,15 @@ Library authors are particularly sensitive to performance overhead, as their cod
     }
     ```
 
-With `tokio-rs/tracing`, there's no clean way to have zero-cost tracing when disabled. This makes library authors reluctant to add instrumentation to performance-sensitive code paths.
+With `tokio-rs/tracing`, there's no clean way to have tracing zero-cost disabled. This makes library authors reluctant to add instrumentation to performance-sensitive code paths.
 
 ### 3. No Context Propagation
 
-Distributed tracing requires propagating context across service boundaries, but `tokio-rs/tracing` leaves this largely as an exercise for the developer. For example, the [tonic official example](https://github.com/hyperium/tonic/blob/master/examples/src/tracing/server.rs) demonstrates how to trace gRPC service using tonic:
+Distributed tracing requires propagating context across service boundaries, but `tokio-rs/tracing` leaves this largely as an exercise for the developer. For example, this is [tonic official example](https://github.com/hyperium/tonic/blob/master/examples/src/tracing/server.rs) demonstrating how to trace gRPC service:
 
 ```rust
 // Server setup with `tokio-rs/tracing`
 Server::builder()
-    // Basic span only, no context extraction
     .trace_fn(|_| tracing::info_span!("grpc_server"))
     .add_service(MyServiceServer::new(MyService::default()))
     .serve(addr)
@@ -157,13 +154,37 @@ Server::builder()
 
 The above example only creates a basic span but doesn't extract tracing context from the incoming request.
 
-## Introducing `fastrace`: A Modern Solution
+The consequences of missing context propagation are severe in distributed systems. When a trace disconnects due to missing context:
 
-`fastrace` takes a different approach to tracing in Rust. Its core design principles include:
+- Instead of seeing a complete flow of a request like:
+  ```
+  Trace #1: Frontend → API Gateway → User Service → Database → Response
+  ```
+
+- You'll see disconnected fragments from a request:
+  ```
+  Trace #1: Frontend → API Gateway
+  Trace #2: User Service → Database
+  Trace #3 API Gateway → Response
+  ```
+
+- Even worse, when multile requests are interleaved, the traces become a chaotic mess:
+  ```
+  Trace #1: Frontend → API Gateway
+  Trace #2: Frontend → API Gateway
+  Trace #3: Frontend → API Gateway
+  Trace #4: User Service → Database
+  Trace #6: API Gateway → Response
+  Trace #5: User Service → Database
+  ```
+
+This fragmentation makes it extremely difficult to follow request flows, isolate performance issues, or understand causal relationships between services.
+
+## Introducing `fastrace`: A Fast and Complete Solution
 
 ### 1. Zero-cost Abstraction
 
-`fastrace` is designed as a true zero-cost abstraction. When disabled, instrumentation compiles away completely, resulting in no runtime overhead. This makes it ideal for libraries concerned about performance.
+`fastrace` is designed with real zero-cost abstraction. When disabled, instrumentations are completely omitted from compilation, resulting in no runtime overhead. This makes it ideal for libraries concerned about performance.
 
 ### 2. Ecosystem Compatibility
 
@@ -177,16 +198,13 @@ The API is designed to be intuitive and require minimal boilerplate, focusing on
 
 ![Fastrace Performance](assets/trace-100-spans.png)
 
-`fastrace` is designed for high-performance applications. It can handle massive amount of spans per second with minimal impact on CPU and memory usage.
+`fastrace` is designed for high-performance applications. It can handle massive amounts of spans with minimal impact on CPU and memory usage.
 
-### 5. Ergonomics for both Applications and Libraries
+### 5. Ergonomic for both Applications and Libraries
 
 Libraries can use `fastrace` without imposing performance penalties when not needed:
 
 ```rust
-// In a library crate:
-use fastrace::prelude::*;
-
 #[fastrace::trace]  // Zero-cost when the application doesn't enable the 'enable' feature
 pub fn process_data(data: &[u8]) -> Result<Vec<u8>, Error> {
     // Library uses standard log crate
@@ -196,14 +214,14 @@ pub fn process_data(data: &[u8]) -> Result<Vec<u8>, Error> {
 }
 ```
 
-The key point here is that libraries should include fastrace without enabling any features:
+The key point here is that libraries should include `fastrace` without enabling any features:
 
 ```toml
 [dependencies]
 fastrace = "0.7"  # No 'enable' feature
 ```
 
-When an application uses this library and doesn't enable the 'enable' feature of fastrace:
+When an application uses this library and doesn't enable the 'enable' feature of `fastrace`:
 - All tracing code is completely optimized away at compile time
 - Zero runtime overhead is added to the library
 - No impact on performance-critical code paths
@@ -222,25 +240,24 @@ This is a significant advantage over other tracing solutions that either always 
 ```rust
 // For HTTP clients with reqwest
 let response = client.get(&format!("https://user-service/users/{}", user_id))
-    .headers(fastrace_reqwest::traceparent_headers())
+    .headers(fastrace_reqwest::traceparent_headers())  // Automatically inject trace context
     .send()
     .await?;
 
 // For gRPC servers with tonic
 Server::builder()
-    .layer(FastraceServerLayer)  // Automatically extracts context from incoming requests
+    .layer(fastrace_tonic::FastraceServerLayer)  // Automatically extracts context from incoming requests
     .add_service(MyServiceServer::new(MyService::default()))
-    .serve(addr)
-    .await?;
+    .serve(addr);
 
 // For gRPC clients
 let channel = ServiceBuilder::new()
-    .layer(FastraceClientLayer)  // Automatically injects context into outgoing requests
+    .layer(fastrace_tonic::FastraceClientLayer)  // Automatically injects context into outgoing requests
     .service(channel);
 
 // For data access with OpenDAL
 let op = Operator::new(services::Memory::default())?
-    .layer(FastraceLayer)  // Automatically traces all data operations
+    .layer(opendal::layers::FastraceLayer)  // Automatically traces all data operations
     .finish();
 op.write("test", "0".repeat(16 * 1024 * 1024).into_bytes())
     .await?;
@@ -259,23 +276,19 @@ This provides out-of-box distributed tracing without manual context handling.
 The integration allows your logs to be automatically associated with trace spans, providing correlation without requiring new logging APIs:
 
 ```rust
-// Standard log entries are automatically associated with the current span
+// This integration allows automatically associating your logs with
+// trace spans, providing correlation without requiring using different
+// logging macros.
 log::info!("Processing started");
 
 // Later, in your logging infrastructure, you can see which trace and span
-// each log entry belongs to
+// each log entry belongs to.
 ```
 
 To illustrate the simplicity of this approach, here's a streamlined example of building a microservice with complete observability:
 
 ```rust
-use fastrace::prelude::*;
-use fastrace_poem::FastraceMiddleware;
-use fastrace_jaeger::JaegerReporter;
-use logforth::diagnostic;
-use poem::{get, handler, EndpointExt, Route, Server};
-
-#[handler]
+#[poem::handler]
 #[fastrace::trace]  // Automatically creates and manages spans
 async fn get_user(Path(user_id): Path<String>) -> Json<User> {
     // Standard log calls are automatically associated with the current span
@@ -289,7 +302,6 @@ async fn get_user(Path(user_id): Path<String>) -> Json<User> {
         email: user_details.email,
     })
 }
-
 
 #[fastrace::trace]
 async fn fetch_user_details(user_id: &str) -> UserDetails {
@@ -309,11 +321,11 @@ async fn main() {
     // Configure logging and tracing
     setup_observability("user-service");
     
-    let app = Route::new()
-        .at("/users/:id", get(get_user))
-        .with(FastraceMiddleware); // Automatic trace context extraction
+    let app = poem::Route::new()
+        .at("/users/:id", poem::get(get_user))
+        .with(fastrace_poem::FastraceMiddleware); // Automatic trace context extraction
         
-    Server::new(poem::listener::TcpListener::bind("0.0.0.0:3000"))
+    poem::Server::new(poem::listener::TcpListener::bind("0.0.0.0:3000"))
         .run(app)
         .await
         .unwrap();
@@ -335,15 +347,15 @@ fn setup_observability(service_name: &str) {
 
     // Setup tracing with fastrace
     fastrace::set_reporter(
-        JaegerReporter::new("127.0.0.1:6831".parse().unwrap(), service_name).unwrap(),
+        fastrace_jaeger::JaegerReporter::new("127.0.0.1:6831".parse().unwrap(), service_name).unwrap(),
         fastrace::collector::Config::default()
     );
 }
 ```
 
-## Benefits for Library Authors
+## Conclusion
 
-One of the most significant advantages of `fastrace` is how it addresses the needs of library authors:
+`fastrace` represents a modern approach to distributed tracing in Rust - one that prioritizes simplicity, ecosystem compatibility, and performance. The most significant advantages of `fastrace` are:
 
 1. **Zero Runtime Overhead When Disabled**: Libraries can add rich instrumentation without worrying about performance impact when tracing is not enabled by the application.
 
@@ -354,14 +366,6 @@ One of the most significant advantages of `fastrace` is how it addresses the nee
 4. **Predictable Performance**: `fastrace`'s performance characteristics are consistent and predictable, even under high load.
 
 An ecosystem where libraries are comprehensively instrumented with `fastrace` would enable unprecedented visibility into applications, without the performance or compatibility concerns that have historically prevented such instrumentation.
-
-## Conclusion
-
-`fastrace` represents a modern approach to distributed tracing in Rust - one that prioritizes simplicity, ecosystem compatibility, and performance. Rather than replacing existing tools, it complements them to provide a complete observability solution.
-
-By focusing on compatibility rather than replacement, fastrace avoids the ecosystem fragmentation that has challenged the Rust observability landscape. It allows libraries and applications to use a consistent approach to both logging and tracing, without forcing everyone to adopt a new paradigm.
-
-We're grateful to the teams at companies like [ScopeDB](https://www.scopedb.io/) who have provided invaluable feedback and contributions, helping to make fastrace a production-ready solution for distributed tracing in Rust.
 
 ## Resources
 

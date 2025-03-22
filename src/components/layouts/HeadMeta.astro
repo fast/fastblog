@@ -37,6 +37,16 @@ const { title, description, image } = Astro.props;
 <meta property="twitter:description" content={description} />
 <meta property="twitter:image" content={new URL(image, Astro.url)} />
 
+<!-- Google Analytics -->
+<script is:inline type="text/partytown" async src="https://www.googletagmanager.com/gtag/js?id=G-1CHQV4JH2Z"></script>
+<script is:inline type="text/partytown">
+  window.dataLayer = window.dataLayer || [];
+  function gtag(...args){dataLayer.push(args);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-1CHQV4JH2Z');
+</script>
+
 <link
     rel="alternate"
     type="application/rss+xml"

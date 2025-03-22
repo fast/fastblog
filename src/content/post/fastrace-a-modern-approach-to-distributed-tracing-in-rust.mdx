@@ -105,7 +105,7 @@ This fragmentation is particularly problematic for library authors. When creatin
 
 Many libraries choose the first option for simplicity, but miss out on the benefits of tracing.
 
-While `tokio-rs/tracing` does provide a feature flag 'log' that allows emitting log records to the `log` crate when using tracing's macros, library authors must manually enable this feature flag to ensure all users properly receive log records regardless of which logging framework they use. This creates additional configuration complexity for library maintainers.
+While `tokio-rs/tracing` does provide a feature flag 'log' that allows emitting log records to the `log` crate when using `tokio-rs/tracing`'s macros, library authors must manually enable this feature flag to ensure all users properly receive log records regardless of which logging framework they use. This creates additional configuration complexity for library maintainers.
 
 Furthermore, applications using `tokio-rs/tracing` must additionally install and configure the `tracing-log` bridge to properly receive log records from libraries that use the `log` crate. This creates a bidirectional compatibility problem requiring explicit configuration:
 
@@ -141,10 +141,9 @@ With `tokio-rs/tracing`, there's no clean way to have tracing zero-cost disabled
 
 ### 3. No Context Propagation
 
-Distributed tracing requires propagating context across service boundaries, but `tokio-rs/tracing` leaves this largely as an exercise for the developer. For example, this is [tonic official example](https://github.com/hyperium/tonic/blob/master/examples/src/tracing/server.rs) demonstrating how to trace gRPC service:
+Distributed tracing requires propagating context across service boundaries, but `tokio-rs/tracing` leaves this largely as an exercise for the developer. For example, this is the [tonic official example](https://github.com/hyperium/tonic/blob/master/examples/src/tracing/server.rs) demonstrating how to trace a gRPC service:
 
 ```rust
-// Server setup with `tokio-rs/tracing`
 Server::builder()
     .trace_fn(|_| tracing::info_span!("grpc_server"))
     .add_service(MyServiceServer::new(MyService::default()))
@@ -165,7 +164,7 @@ The consequences of missing context propagation are severe in distributed system
   ```
   Trace #1: Frontend → API Gateway
   Trace #2: User Service → Database
-  Trace #3 API Gateway → Response
+  Trace #3: API Gateway → Response
   ```
 
 - Even worse, when multile requests are interleaved, the traces become a chaotic mess:
@@ -273,12 +272,9 @@ This provides out-of-box distributed tracing without manual context handling.
 - **logforth**: A flexible logging implementation with industrial-ready features
 - **fastrace**: High-performance tracing with distributed context propagation
 
-The integration allows your logs to be automatically associated with trace spans, providing correlation without requiring new logging APIs:
+This integration allows automatically associating your logs with trace spans, providing correlation without requiring using different logging macros:
 
 ```rust
-// This integration allows automatically associating your logs with
-// trace spans, providing correlation without requiring using different
-// logging macros.
 log::info!("Processing started");
 
 // Later, in your logging infrastructure, you can see which trace and span
@@ -355,7 +351,7 @@ fn setup_observability(service_name: &str) {
 
 ## Conclusion
 
-`fastrace` represents a modern approach to distributed tracing in Rust - one that prioritizes simplicity, ecosystem compatibility, and performance. The most significant advantages of `fastrace` are:
+`fastrace` represents a modern approach to distributed tracing in Rust. The most significant advantages of `fastrace` are:
 
 1. **Zero Runtime Overhead When Disabled**: Libraries can add rich instrumentation without worrying about performance impact when tracing is not enabled by the application.
 

@@ -3,14 +3,14 @@ title: "Fastrace: A Modern Approach to Distributed Tracing in Rust"
 tags:
   - Observability
   - Traces
-pubDate: 2025-03-21
+pubDate: 2025-03-22
 ---
 
 ## TL;DR
 
 Distributed tracing is critical for understanding modern microservice architectures. While `tokio-rs/tracing` is widely used in Rust, it comes with significant challenges: ecosystem fragmentation, complex configuration, and high overhead. 
 
-[fastrace](https://github.com/fast/fastrace) provides a production-ready solution with seamless ecosystem integration, out-of-box OpenTelemetry support, and a more straightforward API that works naturally with the existing logging infrastructure.
+[Fastrace](https://github.com/fast/fastrace) provides a production-ready solution with seamless ecosystem integration, out-of-box OpenTelemetry support, and a more straightforward API that works naturally with the existing logging infrastructure.
 
 The following example demonstrates how to trace functions with `fastrace`:
 
@@ -110,14 +110,14 @@ While `tokio-rs/tracing` does provide a feature flag 'log' that allows emitting 
 Furthermore, applications using `tokio-rs/tracing` must additionally install and configure the `tracing-log` bridge to properly receive log records from libraries that use the `log` crate. This creates a bidirectional compatibility problem requiring explicit configuration:
 
 ```toml
-# In a library's Cargo.toml
+# Library's Cargo.toml
 [dependencies]
-tracing = { version = "0.1", features = ["log"] }  # Required for log compatibility
+tracing = { version = "0.1", features = ["log"] }  # Emit log records for log compatibility
 
-# In an application's Cargo.toml
+# Application's Cargo.toml
 [dependencies]
 tracing = "0.1"
-tracing-log = "0.2"  # Required bridge for log crate compatibility
+tracing-log = "0.2"  # Listen to log records for log compatibility
 ```
 
 ### 2. Performance Impact for Libraries
@@ -126,9 +126,9 @@ Library authors are particularly sensitive to performance overhead, as their cod
 
 1. Always instrument tracing (and impose overhead on all users)
 2. Don't instrument at all (and lose observability)
-3. Create a complex feature-flag system (increasing maintenance burden)
+3. Create an additional feature flag system (increasing maintenance burden)
 
-    This is a common pattern in libraries using `tokio-rs/tracing`:
+    Here is a common pattern in libraries using `tokio-rs/tracing`:
 
     ```rust
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(password), fields(user_id = user.id)))]
@@ -137,11 +137,13 @@ Library authors are particularly sensitive to performance overhead, as their cod
     }
     ```
 
+    Different libraries may define feature flags with subtly different names, making it hard for the final application to configure all of them.
+
 With `tokio-rs/tracing`, there's no clean way to have tracing zero-cost disabled. This makes library authors reluctant to add instrumentation to performance-sensitive code paths.
 
 ### 3. No Context Propagation
 
-Distributed tracing requires propagating context across service boundaries, but `tokio-rs/tracing` leaves this largely as an exercise for the developer. For example, this is the [tonic official example](https://github.com/hyperium/tonic/blob/master/examples/src/tracing/server.rs) demonstrating how to trace a gRPC service:
+Distributed tracing requires propagating context across service boundaries, but `tokio-rs/tracing` leaves this largely as an exercise for the developer. For example, this is [tonic's official example](https://github.com/hyperium/tonic/blob/master/examples/src/tracing/server.rs) demonstrating how to trace a gRPC service:
 
 ```rust
 Server::builder()
@@ -254,7 +256,7 @@ let channel = ServiceBuilder::new()
     .layer(fastrace_tonic::FastraceClientLayer)  // Automatically injects context into outgoing requests
     .service(channel);
 
-// For data access with OpenDAL
+// For data access with Apache OpenDAL
 let op = Operator::new(services::Memory::default())?
     .layer(opendal::layers::FastraceLayer)  // Automatically traces all data operations
     .finish();

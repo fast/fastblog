@@ -12,13 +12,18 @@ import remarkBlockContainers from 'remark-block-containers';
 import astroExpressiveCode from 'astro-expressive-code';
 import rehypeFigure from 'rehype-figure';
 import remarkFigureCaption from "@microflash/remark-figure-caption";
+import partytown from '@astrojs/partytown'
 
 import { remarkModifiedTime } from './plugins/remark-modified-time';
 import { remarkReadingTime } from './plugins/remark-reading-time';
 import slateConfig from './slate.config';
 
 function computedIntegrations() {
-  const result = [astroExpressiveCode(), mdx(), react(), sitemap(slateConfig.sitemap)];
+  const result = [astroExpressiveCode(), mdx(), react(), sitemap(slateConfig.sitemap), partytown({
+    config: {
+      forward: ["dataLayer.push"],
+    },
+  })];
 
   return result;
 }
